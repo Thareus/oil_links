@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Oil Links - RSS Entries</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* Layout */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #F7F7F9;
+      color: #222;
+    }
+    header {
+      background: #0E3A5E;
+      color: #FFF;
+      padding: 14px 20px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    main {
+      padding: 16px 20px 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Controls */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 220px 180px 180px 120px;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    .control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 12px;
+      color: #444;
+    }
+    input[type="text"], input[type="date"], select {
+      padding: 8px 10px;
+      border: 1px solid #D0D5DD;
+      border-radius: 6px;
+      background: #FFF;
+      outline: none;
+      font-size: 14px;
+    }
+    input[type="text"]:focus, input[type="date"]:focus, select:focus {
+      border-color: #0E3A5E;
+      box-shadow: 0 0 0 3px rgba(14, 58, 94, 0.12);
+    }
+    .stats {
+      margin: 6px 0 14px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* Table */
+    .table-wrap {
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      overflow: auto;
+      background: #FFF;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #F1F5F9;
+      color: #0F172A;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 1px solid #E5E7EB;
+      padding: 10px 12px;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    tbody td {
+      border-bottom: 1px solid #F1F5F9;
+      padding: 9px 12px;
+      vertical-align: top;
+    }
+    tbody tr:hover {
+      background: #FAFAFB;
+    }
+    .title a {
+      color: #0E3A5E;
+      text-decoration: none;
+    }
+    .title a:hover {
+      text-decoration: underline;
+    }
+    .muted {
+      color: #64748B;
+      font-size: 12px;
+    }
+    .source-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #EEF2FF;
+      color: #3730A3;
+      font-size: 12px;
+      border: 1px solid #E0E7FF;
+    }
+
+    /* Footer */
+    footer {
+      padding: 10px 20px 30px;
+      font-size: 12px;
+      color: #6B7280;
+      text-align: center;
+    }
+
+    /* Small screens */
+    @media (max-width: 900px) {
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Oil Links — RSS Entries</h1>
+  </header>
+
+  <main>
+    <div class="controls">
+      <div class="control">
+        <label for="q">Search (title or URL)</label>
+        <input id="q" type="text" placeholder="Type to filter..." />
+      </div>
+      <div class="control">
+        <label for="source">Source</label>
+        <select id="source">
+          <option value="">All sources</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="start">Start date (published)</label>
+        <input id="start" type="date" />
+      </div>
+      <div class="control">
+        <label for="end">End date (published)</label>
+        <input id="end" type="date" />
+      </div>
+      <div class="control">
+        <label for="limit">Rows</label>
+        <select id="limit">
+          <option>50</option>
+          <option selected>100</option>
+          <option>250</option>
+          <option>500</option>
+          <option>1000</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">Loading…</div>
+
+    <div class="table-wrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th data-sort="published">Published</th>
+            <th data-sort="title">Title</th>
+            <th data-sort="source_name">Source</th>
+            <th data-sort="link">URL</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    Data source: rss_feeds/feeds.json. To refresh, run: python rss_feeds/feeds_dump.py
+  </footer>
+
+  <script>
+    // Load JSON and render a filterable/sortable table
+    // Schema expected from feeds_dump.py:
+    // {
+    //   exported_at: string,
+    //   count: number,
+    //   entries: [{ id, title, link, published, source_name, source_website }]
+    // }
+
+    const state = {
+      entries: [],
+      filtered: [],
+      sortKey: 'published',
+      sortDir: 'desc', // 'asc' | 'desc'
+    };
+
+    const el = {
+      q: document.getElementById('q'),
+      source: document.getElementById('source'),
+      start: document.getElementById('start'),
+      end: document.getElementById('end'),
+      limit: document.getElementById('limit'),
+      stats: document.getElementById('stats'),
+      tbody: document.querySelector('#table tbody'),
+      thead: document.querySelector('#table thead'),
+    };
+
+    function parseISO(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    function fmtDate(dateStr) {
+      const d = parseISO(dateStr);
+      if (!d) return '';
+      // yyyy-mm-dd
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const d2 = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d2}`;
+    }
+
+    function unique(arr) {
+      return Array.from(new Set(arr)).sort((a, b) => (a || '').localeCompare(b || ''));
+    }
+
+    function compare(a, b, key) {
+      const av = a[key];
+      const bv = b[key];
+      if (key === 'published') {
+        const ad = parseISO(av)?.getTime() ?? -Infinity;
+        const bd = parseISO(bv)?.getTime() ?? -Infinity;
+        return ad - bd;
+      }
+      return String(av || '').localeCompare(String(bv || ''), undefined, { sensitivity: 'base' });
+    }
+
+    function applyFilters() {
+      const q = el.q.value.trim().toLowerCase();
+      const source = el.source.value;
+      const start = el.start.value ? new Date(el.start.value + 'T00:00:00Z') : null;
+      const end = el.end.value ? new Date(el.end.value + 'T23:59:59Z') : null;
+
+      let rows = state.entries;
+
+      if (q) {
+        rows = rows.filter(r =>
+          (r.title && r.title.toLowerCase().includes(q)) ||
+          (r.link && r.link.toLowerCase().includes(q))
+        );
+      }
+
+      if (source) {
+        rows = rows.filter(r => r.source_name === source);
+      }
+
+      if (start) {
+        rows = rows.filter(r => {
+          const d = parseISO(r.published);
+          return d ? d >= start : false;
+        });
+      }
+      if (end) {
+        rows = rows.filter(r => {
+          const d = parseISO(r.published);
+          return d ? d <= end : false;
+        });
+      }
+
+      // Sort
+      rows = rows.slice().sort((a, b) => compare(a, b, state.sortKey));
+      if (state.sortDir === 'desc') rows.reverse();
+
+      state.filtered = rows;
+      render();
+    }
+
+    function render() {
+      const maxRows = parseInt(el.limit.value, 10) || 100;
+      const rows = state.filtered.slice(0, maxRows);
+
+      el.tbody.innerHTML = rows.map(r => {
+        const pub = fmtDate(r.published);
+        const title = r.title ? r.title.replace(/&/g, '&').replace(/</g, '<') : '';
+        const url = r.link ? r.link : '';
+        const host = (() => {
+          try { return new URL(url).hostname; } catch { return ''; }
+        })();
+
+        return `
+          <tr>
+            <td class="muted">${pub}</td>
+            <td class="title"><a href="${url}" target="_blank" rel="noopener noreferrer">${title || url}</a></td>
+            <td><span class="source-badge" title="${r.source_website || ''}">${r.source_name || ''}</span></td>
+            <td class="muted">${host}</td>
+          </tr>
+        `;
+      }).join('');
+
+      el.stats.textContent = `${state.filtered.length} matched of ${state.entries.length} total | Showing ${Math.min(rows.length, maxRows)} rows | Sort: ${state.sortKey} ${state.sortDir.toUpperCase()}`;
+    }
+
+    function attachSortHandlers() {
+      el.thead.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+        const key = th.getAttribute('data-sort');
+        if (state.sortKey === key) {
+          state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.sortKey = key;
+          state.sortDir = key === 'title' ? 'asc' : 'desc';
+        }
+        applyFilters();
+      });
+    }
+
+    function attachFilterHandlers() {
+      ['q', 'source', 'start', 'end', 'limit'].forEach(id => {
+        el[id].addEventListener('input', applyFilters);
+        el[id].addEventListener('change', applyFilters);
+      });
+    }
+
+    async function loadData() {
+      try {
+        // Use absolute path relative to this HTML file to avoid CORS/file:// fetch issues on Windows.
+        // When opening this file directly (file://), fetch can fail. Prefer http(s) serving or use location-based path.
+        const base = location.href.replace(/\\/g, '/');
+        const url = base.endsWith('.html') ? base.substring(0, base.lastIndexOf('/') + 1) + 'feeds.json' : './feeds.json';
+        const res = await fetch(url, { cache: 'no-cache' });
+        if (!res.ok) throw new Error('Failed to load feeds.json');
+        const json = await res.json();
+        const entries = Array.isArray(json.entries) ? json.entries : [];
+
+        state.entries = entries.map(e => ({
+          id: e.id,
+          title: e.title,
+          link: e.link,
+          published: e.published || null,
+          source_name: e.source_name || '',
+          source_website: e.source_website || '',
+        }));
+
+        // Populate sources
+        const sources = unique(state.entries.map(e => e.source_name).filter(Boolean));
+        el.source.innerHTML = '<option value="">All sources</option>' +
+          sources.map(s => `<option value="${s}">${s}</option>`).join('');
+
+        // Initial filter and render
+        applyFilters();
+      } catch (err) {
+        console.error(err);
+        // Provide actionable guidance if opened via file:// where fetch may be blocked.
+        el.stats.textContent = 'Failed to load feeds.json. If opening this page via file://, start a local server in project root and open http://localhost:8000/rss_feeds/oil_links.html';
+      }
+    }
+
+    // Init
+    attachSortHandlers();
+    attachFilterHandlers();
+    loadData();
+  </script>
+</body>
+</html>
