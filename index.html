@@ -146,9 +146,7 @@
       </div>
       <div class="control">
         <label for="source">Source</label>
-        <select id="source">
-          <option value="">All sources</option>
-        </select>
+        <select id="source" multiple size="6"></select>
       </div>
       <div class="control">
         <label for="start">Start date (published)</label>
@@ -250,7 +248,7 @@
 
     function applyFilters() {
       const q = el.q.value.trim().toLowerCase();
-      const source = el.source.value;
+      const selectedSources = Array.from(el.source.selectedOptions).map(o => o.value);
       const start = el.start.value ? new Date(el.start.value + 'T00:00:00Z') : null;
       const end = el.end.value ? new Date(el.end.value + 'T23:59:59Z') : null;
 
@@ -270,8 +268,9 @@
         });
       }
 
-      if (source) {
-        rows = rows.filter(r => r.source_name === source);
+      if (selectedSources.length) {
+        const set = new Set(selectedSources);
+        rows = rows.filter(r => set.has(r.source_name));
       }
 
       if (start) {
@@ -360,8 +359,7 @@
 
         // Populate sources
         const sources = unique(state.entries.map(e => e.source_name).filter(Boolean));
-        el.source.innerHTML = '<option value="">All sources</option>' +
-          sources.map(s => `<option value="${s}">${s}</option>`).join('');
+        el.source.innerHTML = sources.map(s => `<option value="${s}">${s}</option>`).join('');
 
         // Initial filter and render
         applyFilters();
