@@ -129,6 +129,7 @@
     @media (max-width: 900px) {
       .controls {
         grid-template-columns: 1fr 1fr;
+        gap: 2px;
       }
     }
     /* Advanced controls row for enhanced source multi-select */
@@ -148,35 +149,33 @@
 
   <main>
     <div class="controls">
-      <div style="display:flex; flex-direction:row">
-        <div class="control">
-          <label for="q">Search (title or URL)</label>
-          <input id="q" type="text" placeholder="Type to filter..." />
-        </div>
-        <div class="control">
-          <label for="start">Start date (published)</label>
-          <input id="start" type="date" />
-        </div>
-        <div class="control">
-          <label for="end">End date (published)</label>
-          <input id="end" type="date" />
-        </div>
-        <div class="control">
-          <label for="limit">Rows</label>
-          <select id="limit">
-            <option>50</option>
-            <option selected>100</option>
-            <option>250</option>
-            <option>500</option>
-            <option>1000</option>
-          </select>
-        </div>
+      <div class="control">
+        <label for="q">Search (title or URL)</label>
+        <input id="q" type="text" placeholder="Type to filter..." />
       </div>
-      <div class="controls-advanced">
-        <div class="control">
-          <label for="sourceChoices">Source</label>
-          <select id="sourceChoices" multiple></select>
-        </div>
+      <div class="control">
+        <label for="start">Start date (published)</label>
+        <input id="start" type="date" />
+      </div>
+      <div class="control">
+        <label for="end">End date (published)</label>
+        <input id="end" type="date" />
+      </div>
+      <div class="control">
+        <label for="limit">Rows</label>
+        <select id="limit">
+          <option>50</option>
+          <option selected>100</option>
+          <option>250</option>
+          <option>500</option>
+          <option>1000</option>
+        </select>
+      </div>
+    </div>
+    <div class="controls-advanced">
+      <div class="control">
+        <label for="sourceChoices">Source</label>
+        <select id="sourceChoices" multiple></select>
       </div>
     </div>
 
@@ -222,7 +221,6 @@
 
     const el = {
       q: document.getElementById('q'),
-      source: document.getElementById('source'),
       sourceChoices: document.getElementById('sourceChoices'),
       start: document.getElementById('start'),
       end: document.getElementById('end'),
@@ -267,7 +265,7 @@
       const q = el.q.value.trim().toLowerCase();
       const selectedSources = el.sourceChoices && el.sourceChoices.selectedOptions
         ? Array.from(el.sourceChoices.selectedOptions).map(o => o.value)
-        : Array.from(el.source.selectedOptions).map(o => o.value);
+        : [];
       const start = el.start.value ? new Date(el.start.value + 'T00:00:00Z') : null;
       const end = el.end.value ? new Date(el.end.value + 'T23:59:59Z') : null;
 
@@ -350,9 +348,12 @@
     }
 
     function attachFilterHandlers() {
-      ['q', 'source', 'start', 'end', 'limit'].forEach(id => {
-        el[id].addEventListener('input', applyFilters);
-        el[id].addEventListener('change', applyFilters);
+      // Bind to existing controls. 'source' does not exist; use 'sourceChoices' for source filtering.
+      ['q', 'sourceChoices', 'start', 'end', 'limit'].forEach(id => {
+        const control = el[id];
+        if (!control) return; // Defensive: skip if missing
+        control.addEventListener('input', applyFilters);
+        control.addEventListener('change', applyFilters);
       });
     }
 
@@ -379,7 +380,7 @@
         // Populate sources
         const sources = unique(state.entries.map(e => e.source_name).filter(Boolean));
         const optionsHtml = sources.map(s => `<option value="${s}">${s}</option>`).join('');
-        el.source.innerHTML = optionsHtml;
+        // Only populate the existing multi-select
         el.sourceChoices.innerHTML = optionsHtml;
 
         // Initialize Choices.js for enhanced multi-select
