@@ -131,6 +131,14 @@
         grid-template-columns: 1fr 1fr;
       }
     }
+    /* Advanced controls row for enhanced source multi-select */
+    .controls-advanced {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -140,31 +148,35 @@
 
   <main>
     <div class="controls">
-      <div class="control">
-        <label for="q">Search (title or URL)</label>
-        <input id="q" type="text" placeholder="Type to filter..." />
+      <div style="display:flex; flex-direction:row">
+        <div class="control">
+          <label for="q">Search (title or URL)</label>
+          <input id="q" type="text" placeholder="Type to filter..." />
+        </div>
+        <div class="control">
+          <label for="start">Start date (published)</label>
+          <input id="start" type="date" />
+        </div>
+        <div class="control">
+          <label for="end">End date (published)</label>
+          <input id="end" type="date" />
+        </div>
+        <div class="control">
+          <label for="limit">Rows</label>
+          <select id="limit">
+            <option>50</option>
+            <option selected>100</option>
+            <option>250</option>
+            <option>500</option>
+            <option>1000</option>
+          </select>
+        </div>
       </div>
-      <div class="control">
-        <label for="source">Source</label>
-        <select id="source" multiple size="6"></select>
-      </div>
-      <div class="control">
-        <label for="start">Start date (published)</label>
-        <input id="start" type="date" />
-      </div>
-      <div class="control">
-        <label for="end">End date (published)</label>
-        <input id="end" type="date" />
-      </div>
-      <div class="control">
-        <label for="limit">Rows</label>
-        <select id="limit">
-          <option>50</option>
-          <option selected>100</option>
-          <option>250</option>
-          <option>500</option>
-          <option>1000</option>
-        </select>
+      <div class="controls-advanced">
+        <div class="control">
+          <label for="sourceChoices">Source</label>
+          <select id="sourceChoices" multiple></select>
+        </div>
       </div>
     </div>
 
@@ -188,6 +200,10 @@
     Data source: rss_feeds/feeds.json. To refresh, run: python rss_feeds/feeds_dump.py
   </footer>
 
+  <!-- Choices.js (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
   <script>
     // Load JSON and render a filterable/sortable table
     // Schema expected from feeds_dump.py:
@@ -207,6 +223,7 @@
     const el = {
       q: document.getElementById('q'),
       source: document.getElementById('source'),
+      sourceChoices: document.getElementById('sourceChoices'),
       start: document.getElementById('start'),
       end: document.getElementById('end'),
       limit: document.getElementById('limit'),
@@ -248,7 +265,9 @@
 
     function applyFilters() {
       const q = el.q.value.trim().toLowerCase();
-      const selectedSources = Array.from(el.source.selectedOptions).map(o => o.value);
+      const selectedSources = el.sourceChoices && el.sourceChoices.selectedOptions
+        ? Array.from(el.sourceChoices.selectedOptions).map(o => o.value)
+        : Array.from(el.source.selectedOptions).map(o => o.value);
       const start = el.start.value ? new Date(el.start.value + 'T00:00:00Z') : null;
       const end = el.end.value ? new Date(el.end.value + 'T23:59:59Z') : null;
 
@@ -359,7 +378,22 @@
 
         // Populate sources
         const sources = unique(state.entries.map(e => e.source_name).filter(Boolean));
-        el.source.innerHTML = sources.map(s => `<option value="${s}">${s}</option>`).join('');
+        const optionsHtml = sources.map(s => `<option value="${s}">${s}</option>`).join('');
+        el.source.innerHTML = optionsHtml;
+        el.sourceChoices.innerHTML = optionsHtml;
+
+        // Initialize Choices.js for enhanced multi-select
+        if (window.Choices && !el.sourceChoices._choicesInitialized) {
+          // eslint-disable-next-line no-new
+          new Choices('#sourceChoices', {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'Select one or more sources',
+            searchPlaceholderValue: 'Search sources',
+            shouldSort: false
+          });
+          el.sourceChoices._choicesInitialized = true;
+        }
 
         // Initial filter and render
         applyFilters();
