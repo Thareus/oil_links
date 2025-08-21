@@ -36,6 +36,36 @@ backend/htmlcov/
 *.env
 backend/.env*
 frontend/.env*
+**/.env
+**/.env.*
+**/*.env
+
+# Do not upload credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.asc
+*.gpg
+*.pgp
+service-account*.json
+*-sa.json
+*serviceaccount*.json
+*credentials*.json
+*.secret.json
+*.secrets.json
+secrets/
+**/secrets/
+.kube/
+.aws/
+.terraform/
+*.tfstate
+*.tfstate.backup
+helm/values.secret*.yaml
+values.secret*.yaml
 
 # Misc
 **/.dockerignore

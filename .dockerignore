@@ -36,6 +36,33 @@ db.sqlite3-journal
 env/
 venv/
 ENV/
+**/.env
+**/.env.*
+**/*.env
+*.env
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.asc
+*.gpg
+*.pgp
+service-account*.json
+*-sa.json
+*serviceaccount*.json
+*credentials*.json
+*.secret.json
+*.secrets.json
+secrets/
+**/secrets/
+helm/values.secret*.yaml
+values.secret*.yaml
+docker-compose.override.yml
 
 # IDE
 .idea/
