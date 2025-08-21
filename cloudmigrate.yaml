@@ -1,0 +1,88 @@
+steps:
+  # Build backend image from backend/ Dockerfile
+  - id: "Build Container Image"
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE_NAME}", "backend"]
+
+  - id: "Push Container Image"
+    name: "gcr.io/cloud-builders/docker"
+    args: ["push", "${_IMAGE_NAME}"]
+
+  - id: "Migrate database"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: /bin/bash
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        # Create or update the job definition
+        if ! gcloud run jobs describe migrate-job --region ${_REGION} >/dev/null 2>&1; then
+          gcloud run jobs create migrate-job \
+            --region ${_REGION} \
+            --image ${_IMAGE_NAME} \
+            --set-cloudsql-instances ${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-secrets DATABASE_URL=${_DATABASE_URL_NAME}:latest \
+            --set-env-vars CLOUDSQL_INSTANCE=${_CLOUD_SQL_CONNECTION_NAME} \
+            --command python \
+            --args manage.py,migrate
+        else
+          gcloud run jobs update migrate-job \
+            --region ${_REGION} \
+            --image ${_IMAGE_NAME} \
+            --set-cloudsql-instances ${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-secrets DATABASE_URL=${_DATABASE_URL_NAME}:latest \
+            --set-env-vars CLOUDSQL_INSTANCE=${_CLOUD_SQL_CONNECTION_NAME} \
+            --command python \
+            --args manage.py,migrate
+        fi
+        # Execute the job now
+        gcloud run jobs execute migrate-job --region ${_REGION}
+
+  - id: "Create/ensure superuser"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: /bin/bash
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        if ! gcloud run jobs describe superuser-job --region ${_REGION} >/dev/null 2>&1; then
+          gcloud run jobs create superuser-job \
+            --region ${_REGION} \
+            --image ${_IMAGE_NAME} \
+            --set-cloudsql-instances ${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-secrets DATABASE_URL=${_DATABASE_URL_NAME}:latest \
+            --set-env-vars CLOUDSQL_INSTANCE=${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-env-vars DJANGO_SUPERUSER_EMAIL=${_ADMIN_EMAIL} \
+            --set-secrets DJANGO_SUPERUSER_PASSWORD=${_ADMIN_PASSWORD_NAME}:latest \
+            --command python \
+            --args manage.py,createsuperuser,--noinput,--email,${_ADMIN_EMAIL}
+        else
+          gcloud run jobs update superuser-job \
+            --region ${_REGION} \
+            --image ${_IMAGE_NAME} \
+            --set-cloudsql-instances ${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-secrets DATABASE_URL=${_DATABASE_URL_NAME}:latest \
+            --set-env-vars CLOUDSQL_INSTANCE=${_CLOUD_SQL_CONNECTION_NAME} \
+            --set-env-vars DJANGO_SUPERUSER_EMAIL=${_ADMIN_EMAIL} \
+            --set-secrets DJANGO_SUPERUSER_PASSWORD=${_ADMIN_PASSWORD_NAME}:latest \
+            --command python \
+            --args manage.py,createsuperuser,--noinput,--email,${_ADMIN_EMAIL}
+        fi
+        gcloud run jobs execute superuser-job --region ${_REGION}
+
+options:
+  dynamicSubstitutions: true
+
+substitutions:
+  _INSTANCE_NAME: oil-links-sql-instance
+  _CLOUD_SQL_CONNECTION_NAME: ${PROJECT_ID}:${_REGION}:${_INSTANCE_NAME}
+  _REGION: europe-west2
+  _SERVICE_NAME: oil-links-backend
+  _ARTIFACT_REGISTRY: oil-links-backend
+  _IMAGE_NAME: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}
+  _ADMIN_EMAIL: oil-links-admin@example.com
+  _ADMIN_PASSWORD_NAME: oil-links-admin-password
+  _DATABASE_URL_NAME: oil-links-database-url
+
+images:
+  - "${_IMAGE_NAME}"

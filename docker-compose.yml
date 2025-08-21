@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15
+    container_name: oil_links_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-oil-links-postgresql-database}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      # Expose on host 5433 to avoid clashing with local Postgres
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oil_links_web
+    restart: unless-stopped
+    env_file:
+      - backend/.env.development
+    environment:
+      # Override DB host/port for container networking
+      DB_HOST: db
+      DB_PORT: 5432
+      # Ensure local settings are used with autoreload
+      DJANGO_SETTINGS_MODULE: backend.settings.local
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+volumes:
+  db_data:
+

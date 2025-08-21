@@ -1,0 +1,41 @@
+# This file tells gcloud/Cloud Build which files NOT to upload as build context.
+# If this file exists, gcloud will use it instead of .gitignore.
+
+# Version control
+.git/
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Root-level large/ephemeral files
+feeds.json
+
+# Node/Next.js (frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/.cache/
+
+# Python (backend)
+backend/.venv/
+.venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+
+# Logs, coverage, artifacts
+**/*.log
+coverage/
+backend/htmlcov/
+
+# Environment files and secrets
+.env
+*.env
+backend/.env*
+frontend/.env*
+
+# Misc
+**/.dockerignore
