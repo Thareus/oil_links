@@ -31,19 +31,19 @@ const StoriesList = dynamic(
 );
 
 const DashboardPage = () => {
-  const { user, isAuthenticated, isLoading, logout, refreshAccessToken } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const theme = useTheme();
   const router = useRouter();
 
   const displayName = useMemo(() => {
-    const first = (user as any)?.firstName || (user as any)?.first_name || '';
+    const first = user?.firstName || '';
     const name = `${first}`.trim();
     return name || 'User';
   }, [user]);
 
   const initials = useMemo(() => {
-    const first = (user as any)?.firstName || (user as any)?.first_name || '';
-    const last = (user as any)?.lastName || (user as any)?.last_name || '';
+    const first = user?.firstName || '';
+    const last = user?.lastName || '';
     const letters = `${first?.charAt(0) || ''}${last?.charAt(0) || ''}`.toUpperCase();
     return letters || user?.email?.charAt(0).toUpperCase() || 'U';
   }, [user]);

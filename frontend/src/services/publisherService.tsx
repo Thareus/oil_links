@@ -58,7 +58,7 @@ const publisherService = {
     const response = await apiClient.request('/sources/publishers/');
     let pubs: Publisher[] = [];
     if (response && typeof response === 'object' && 'results' in response) {
-      pubs = Array.isArray((response as any).results) ? (response as any).results : [];
+      pubs = Array.isArray((response as PaginatedResponse<Publisher>).results) ? (response as PaginatedResponse<Publisher>).results : [];
     } else if (Array.isArray(response)) {
       pubs = response as Publisher[];
     }
@@ -83,7 +83,7 @@ const publisherService = {
     if (typeof params.hidden === 'boolean') sp.set('hidden', String(params.hidden));
     if (params.ordering) sp.set('ordering', params.ordering);
     const endpoint = `/sources/publishers/${sp.toString() ? `?${sp.toString()}` : ''}`;
-    return await apiClient.request(endpoint);
+    return await apiClient.request<PaginatedResponse<Publisher>>(endpoint);
   },
 
   // Update a publisher
@@ -91,7 +91,7 @@ const publisherService = {
     id: number,
     publisherData: { name?: string; website?: string; hidden?: boolean }
   ): Promise<Publisher> {
-    const updated = await apiClient.request(`/sources/publishers/${id}/`, {
+    const updated = await apiClient.request<Publisher>(`/sources/publishers/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(publisherData),
     });

@@ -1,5 +1,4 @@
-from django.db.models import Max, F, Count, Q
-from django.shortcuts import get_object_or_404
+from django.db.models import Max, Count, Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.pagination import LimitOffsetPagination
@@ -8,7 +7,7 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import permissions
-from rest_framework.exceptions import ValidationError, NotFound
+from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 
 from .models import Publisher, Publication

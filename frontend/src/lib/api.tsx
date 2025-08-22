@@ -1,16 +1,28 @@
 
 class APIError extends Error {
-    status: number;
-    data: any;
-    
-    constructor(message: string, status: number, data: any) {
-      super(message);
-      this.name = 'APIError';
-      this.status = status;
-      this.data = data;
-    }
+  status: number;
+  data: unknown;
+
+  constructor(message: string, status: number, data: unknown) {
+    super(message);
+    this.name = 'APIError';
+    this.status = status;
+    this.data = data;
   }
+}
   
+type RegisterInput = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+};
+
+type LoginCredentials = {
+  email: string;
+  password: string;
+};
+
 class APIClient {
   baseURL: string;
   constructor(baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1') {
@@ -25,25 +37,37 @@ class APIClient {
     return null;
   }
 
-  async request(endpoint: string, options: any = {}) {
+  async request<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
     // Get token from localStorage if available
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     
-    // Merge headers without allowing options.headers to overwrite them later
-    const mergedHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
+    // Convert headers to a plain object if they're provided as a Headers object
+    const normalizeHeaders = (headers: HeadersInit | undefined): Record<string, string> => {
+      if (!headers) return {};
+      if (headers instanceof Headers) {
+        const result: Record<string, string> = {};
+        headers.forEach((value, key) => {
+          result[key] = value;
+        });
+        return result;
+      }
+      if (Array.isArray(headers)) {
+        return Object.fromEntries(headers);
+      }
+      return headers as Record<string, string>;
     };
 
-    const { headers: _discardedHeaders, ...restOptions } = options;
-
+    // Create config with merged headers
     const config: RequestInit & { headers: Record<string, string> } = {
       credentials: 'include',
-      ...restOptions,
-      headers: mergedHeaders,
+      ...options, // Spread all other options first
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...normalizeHeaders(options.headers),
+      },
     };
 
     // Helper: attempt to refresh tokens (supports cookie or body refresh)
@@ -58,14 +82,18 @@ class APIClient {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(storedRefresh ? { refresh: storedRefresh } : {}),
         });
-        const refreshData = await refreshResp.json().catch(() => ({}));
+        const refreshData: unknown = await refreshResp.json().catch(() => ({}));
         if (!refreshResp.ok) return false;
         // Update tokens from response (rotation may issue new refresh)
         if (typeof window !== 'undefined') {
-          if (refreshData?.access) localStorage.setItem('access_token', refreshData.access);
-          if (refreshData?.refresh) localStorage.setItem('refresh_token', refreshData.refresh);
+          if (isRecord(refreshData) && typeof refreshData.access === 'string') {
+            localStorage.setItem('access_token', refreshData.access);
+          }
+          if (isRecord(refreshData) && typeof refreshData.refresh === 'string') {
+            localStorage.setItem('refresh_token', refreshData.refresh);
+          }
         }
-        return !!refreshData?.access;
+        return isRecord(refreshData) && typeof refreshData.access === 'string';
       } catch {
         return false;
       }
@@ -74,34 +102,47 @@ class APIClient {
     try {
       // First attempt
       let response = await fetch(url, config);
-      let data = await response.json().catch(() => ({}));
+      let data: unknown = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const isAuthError = response.status === 401 && (
-          (data && (data.code === 'token_not_valid' || data?.detail === 'Given token not valid for any token type')) ||
-          (Array.isArray(data?.messages) && data.messages.some((m: any) => /expired|not valid/i.test(m?.message || '')))
+        // Process error data without creating an unused variable
+        const code = isRecord(data) && typeof data.code === 'string' ? data.code : undefined;
+        const detail = isRecord(data) && typeof data.detail === 'string' ? data.detail : undefined;
+        const messages = isRecord(data) && Array.isArray(data.messages) ? data.messages : [];
+        const hasExpiredMessage = messages.some(
+          (m) => isRecord(m) && typeof m.message === 'string' && /expired|not valid/i.test(m.message)
         );
+        const isAuthError =
+          response.status === 401 && (
+            (!!code && code === 'token_not_valid') ||
+            (!!detail && detail === 'Given token not valid for any token type') ||
+            hasExpiredMessage
+          );
 
         if (isAuthError && await tryRefresh()) {
           // Retry once with new access token
           const newAccess = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-          const retryHeaders: Record<string, string> = {
-            ...mergedHeaders,
-            ...(newAccess ? { Authorization: `Bearer ${newAccess}` } : {}),
-          };
-          response = await fetch(url, { ...config, headers: retryHeaders });
+          response = await fetch(url, {
+            ...config,
+            headers: {
+              ...config.headers,
+              ...(newAccess ? { Authorization: `Bearer ${newAccess}` } : {})
+            }
+          });
           data = await response.json().catch(() => ({}));
-          if (response.ok) return data;
+          if (response.ok) return data as T;
         }
 
         throw new APIError(
-          data?.message || data?.detail || 'An error occurred',
+          (isRecord(data) && typeof data.message === 'string' && data.message) ||
+            (isRecord(data) && typeof data.detail === 'string' && data.detail) ||
+            'An error occurred',
           response.status,
           data
         );
       }
 
-      return data;
+      return data as T;
     } catch (error) {
       if (error instanceof APIError) {
         throw error;
@@ -110,7 +151,7 @@ class APIClient {
     }
   }
 
-  private async ensureCsrfCookie() {
+  private async ensureCsrfCookie(): Promise<void> {
     // Hit the CSRF endpoint to set the cookie
     await this.request('/auth/csrf/', {
       method: 'GET',
@@ -119,7 +160,7 @@ class APIClient {
   }
 
   // Authentication endpoints
-  async register(userData: any) {
+  async register(userData: RegisterInput): Promise<unknown> {
     // Ensure CSRF cookie exists and include token header
     await this.ensureCsrfCookie();
     const csrf = this.getCookie('csrftoken');
@@ -139,14 +180,14 @@ class APIClient {
     });
   }
 
-  async login(credentials: any) {
+  async login(credentials: LoginCredentials): Promise<unknown> {
     return this.request('/auth/token/', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
   }
 
-  async logout(refreshToken: any) {
+  async logout(refreshToken: string): Promise<unknown> {
     // CSRF is not strictly required for JWT logout here, but include it for safety
     const csrf = this.getCookie('csrftoken');
     return this.request('/auth/logout/', {
@@ -159,7 +200,7 @@ class APIClient {
     });
   }
 
-  async refreshToken(refreshToken?: any) {
+  async refreshToken(refreshToken?: string): Promise<unknown> {
     // If no token provided, CookieTokenRefreshView will use the cookie
     return this.request('/auth/token/refresh/', {
       method: 'POST',
@@ -167,25 +208,25 @@ class APIClient {
     });
   }
 
-  async getCurrentUser() {
+  async getCurrentUser(): Promise<unknown> {
     return this.request('/auth/user/');
   }
 
-  async forgotPassword(email: any) {
+  async forgotPassword(email: string): Promise<unknown> {
     return this.request('/auth/password-reset/', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
   }
 
-  async resetPassword(token: any, newPassword: any) {
+  async resetPassword(token: string, newPassword: string): Promise<unknown> {
     return this.request('/auth/password-reset/confirm/', {
       method: 'POST',
       body: JSON.stringify({ token, password: newPassword }),
     });
   }
 
-  async changePassword(currentPassword: any, newPassword: any) {
+  async changePassword(currentPassword: string, newPassword: string): Promise<unknown> {
     return this.request('/auth/change-password/', {
       method: 'POST',
       body: JSON.stringify({
@@ -197,3 +238,7 @@ class APIClient {
 }
 
 export const apiClient = new APIClient();
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}

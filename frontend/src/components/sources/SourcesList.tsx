@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -49,26 +49,28 @@ export default function SourcesList() {
   const [hiddenFilter, setHiddenFilter] = useState<'all' | 'hidden' | 'visible'>('all');
   const toast = useToast();
 
-  const fetchPublishers = async (nextOffset: number, replace = false) => {
+  const fetchPublishers = useCallback(async (newOffset: number, replace = false) => {
+    if (fetchingRef.current && !replace) return;
+    fetchingRef.current = true;
+    const mySeq = ++fetchSeqRef.current;
+    setLoading(true);
+    setError(null);
+    
     try {
-      // Allow replacement fetches (e.g., filter change) to interrupt ongoing non-replace fetches
-      if (fetchingRef.current && !replace) return;
-      fetchingRef.current = true;
-      const mySeq = ++fetchSeqRef.current;
-      setLoading(true);
-      setError(null);
       const res = await publisherService.listPublishers({
         limit: PAGE_SIZE,
-        offset: nextOffset,
+        offset: newOffset,
         q: debouncedFilter.trim() || undefined,
         hidden: hiddenFilter === 'all' ? undefined : hiddenFilter === 'hidden',
         ordering: 'name',
       });
+      
       const newItems = res.results || [];
       // Ignore stale responses
       if (mySeq !== fetchSeqRef.current) return;
+      
       setPublishers((prev) => (replace ? newItems : [...prev, ...newItems]));
-      setOffset(nextOffset + newItems.length);
+      setOffset(newOffset + newItems.length);
       setHasMore(Boolean(res?.next) && newItems.length > 0);
     } catch (err) {
       console.error('Error fetching publishers:', err);
@@ -78,7 +80,7 @@ export default function SourcesList() {
       setLoading(false);
       fetchingRef.current = false;
     }
-  };
+  }, [debouncedFilter, hiddenFilter]);
 
   useEffect(() => {
     // initial page
@@ -86,7 +88,7 @@ export default function SourcesList() {
     setOffset(0);
     setHasMore(true);
     fetchPublishers(0, true);
-  }, []);
+  }, [fetchPublishers]);
 
   // Debounce the name filter to avoid filtering on every keystroke
   useEffect(() => {
@@ -113,7 +115,7 @@ export default function SourcesList() {
     };
     el.addEventListener('scroll', onScroll);
     return () => el.removeEventListener('scroll', onScroll);
-  }, [hasMore, loading, offset]);
+  }, [hasMore, loading, offset, fetchPublishers]);
 
   const handleOpenDialog = (publisher: Publisher | null = null) => {
     if (publisher) {

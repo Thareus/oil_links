@@ -42,7 +42,7 @@ export default function PublisherStatsPage() {
         if (!alive) return;
         setPublishers(pubs || []);
         setStories(sts || []);
-      } catch (e) {
+      } catch {
         if (!alive) return;
         setError('Failed to load stats. Please try again.');
       } finally {
@@ -146,7 +146,7 @@ export default function PublisherStatsPage() {
                     const savedPct = r.total ? (r.saved / r.total) : 0;
                     const widthPct = r.total ? Math.max((r.total / maxTotal) * 100, 2) : 0; // ensure minimal width
                     return (
-                      <Grid item xs={12} key={r.name}>
+                      <Grid size={12} key={r.name}>
                         <Box display="flex" alignItems="center" gap={2}>
                           <Box minWidth={200} maxWidth={300} flexShrink={0}>
                             <Tooltip title={r.hidden ? 'Publisher is hidden' : ''}>

@@ -42,17 +42,27 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 GS_BUCKET_NAME = os.getenv("GS_BUCKET_NAME")
 STATICFILES_DIRS = []
 GS_DEFAULT_ACL = "publicRead"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
+    "staticfiles": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": STATIC_ROOT},
+    },
+    # Media (uploads) go to GCS
     "default": {
         "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        "OPTIONS": {
+            "bucket_name": os.environ.get("GS_MEDIA_BUCKET_NAME"),
+        },
     },
 }
 
+GS_DEFAULT_ACL = None
+
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/"
+STATIC_URL = MEDIA_URL  # or separate buckets/prefixes if you prefer
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # CORS settings (update with your frontend URL)

@@ -70,8 +70,8 @@ const RegisterForm = () => {
         const errorMessage = result.error || 'Registration failed. Please try again.';
         setError(errorMessage);
       }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Registration failed. Please try again.';
+    } catch (err: unknown) {
+      const errorMessage = (err as Error)?.message || 'Registration failed. Please try again.';
       setError(errorMessage);
     } finally {
       setIsLoading(false);

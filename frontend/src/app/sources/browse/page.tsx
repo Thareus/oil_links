@@ -33,7 +33,6 @@ import publicationService, { Publication } from '@/services/publicationService';
 import publisherService from '@/services/publisherService';
 import storyService from '@/services/storyService';
 import { useToast } from '@/contexts/ToastContext';
-import { useRouter } from 'next/navigation';
 
 type SortKey = 'published_at' | 'title' | 'publisher_name';
 type SortDir = 'asc' | 'desc';
@@ -56,8 +55,7 @@ function fmtDate(dateStr?: string | null): string {
 export default function SourcesPage() {
   // Page state
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [, setError] = useState<string | null>(null);
   // Data state
   const [items, setItems] = useState<Publication[]>([]);
   const [publishers, setPublishers] = useState<string[]>([]);
@@ -112,7 +110,7 @@ export default function SourcesPage() {
   const fetchingRef = useRef(false);
   const fetchSeqRef = useRef(0); // sequence to ignore stale responses
 
-  const fetchPage = async (nextOffset: number, replace = false) => {
+  const fetchPage = useCallback(async (nextOffset: number, replace = false) => {
     try {
       // Allow replacement fetches (filter/sort changes) to proceed even if one is in-flight
       if (fetchingRef.current && !replace) return;
@@ -144,7 +142,7 @@ export default function SourcesPage() {
       setLoading(false);
       fetchingRef.current = false;
     }
-  };
+  }, [debouncedQ, debouncedStart, debouncedEnd, selectedSources, sortKey, sortDir]);
 
   // Initial meta + publishers and first page
   useEffect(() => {
@@ -224,7 +222,7 @@ export default function SourcesPage() {
       el.removeEventListener('scroll', onScroll);
       if (rafId != null) cancelAnimationFrame(rafId);
     };
-  }, [hasMore, loading, offset]);
+  }, [hasMore, loading, offset, fetchPage]);
 
   const onHeaderClick = useCallback(
     (key: SortKey) => {
@@ -365,10 +363,15 @@ export default function SourcesPage() {
           </Grid>
         </Paper>
 
-        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 1.5 }}>
-          {matchedCount} matched of {total} total | Loaded {items.length} | Sort: {sortKey}{' '}
-          {sortDir.toUpperCase()}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 1.5 }}>
+            {matchedCount} matched of {total} total | Loaded {items.length} | Sort: {sortKey}{' '}
+            {sortDir.toUpperCase()}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 1.5 }}>
+            {updatedLabel ? `Most recent: ${updatedLabel}` : 'No data available'}
+          </Typography>
+        </Box>
 
         <TableContainer
           component={Paper}
@@ -528,7 +531,7 @@ export default function SourcesPage() {
           </Table>
         </TableContainer>
         <Box component="footer" sx={{ py: 3, textAlign: 'center', color: 'text.secondary', fontSize: 12 }}>
-          And it's Liverpool asking all the questions
+          And it&#39;s Liverpool asking all the questions
         </Box>
       </Container>
       )}

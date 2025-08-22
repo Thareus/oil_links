@@ -18,7 +18,7 @@ const SourcesList = dynamic(
 );
 
 const SourcesPage = () => {
-  const { user, isAuthenticated, isLoading, logout, refreshAccessToken } = useAuth();
+  const {isAuthenticated, isLoading} = useAuth();
 
   if (isLoading && !isAuthenticated) {
     return (

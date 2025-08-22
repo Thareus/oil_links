@@ -76,7 +76,7 @@ export const useApi = <T>(): Omit<ApiResponse<T>, 'data' | 'error' | 'loading'> 
                 });
               }
             }
-          } catch (refreshError) {
+          } catch {
             // If refresh fails, clear tokens and redirect to login
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');

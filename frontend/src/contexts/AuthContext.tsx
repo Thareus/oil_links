@@ -1,8 +1,21 @@
-import React, { createContext, useContext, useReducer, useEffect, useMemo, ReactNode } from 'react';
-import { apiClient } from '@/lib/api';
+import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { apiClient } from '../lib/api';
+
+// Types for API responses
+interface AuthResponse {
+  access: string;
+  refresh: string;
+  user?: User;
+  [key: string]: unknown; // Allow for additional properties with type safety
+}
+
+interface UserResponse {
+  user: User;
+  [key: string]: unknown; // Allow for additional properties with type safety
+}
 
 // Types
-interface User {
+export interface User {
   id: number;
   email: string;
   firstName: string;
@@ -34,8 +47,8 @@ interface AuthContextType extends Omit<AuthState, 'status'> {
     password: string;
     firstName: string;
     lastName: string;
-  }) => Promise<{ success: boolean; data?: any; error?: string }>;
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; data?: any; error?: string }>;
+  }) => Promise<{ success: boolean; data?: AuthResponse; error?: string }>;
+  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; data?: AuthResponse; error?: string }>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string>;
   getCurrentUser: () => Promise<User>;
@@ -60,8 +73,6 @@ const AUTH_ACTIONS = {
   SET_ERROR: 'SET_ERROR',
   CLEAR_ERROR: 'CLEAR_ERROR',
 } as const;
-
-type AuthActionType = keyof typeof AUTH_ACTIONS;
 
 // Initial state
 const initialState: AuthState = {
@@ -155,30 +166,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   };
 
-  // Authentication actions
-  const register = async (userData: {
+  // Authentication actions wrapped in useCallback to prevent unnecessary re-renders
+  const register = useCallback(async (userData: {
     email: string;
     password: string;
     firstName: string;
     lastName: string;
-  }): Promise<{ success: boolean; data?: any; error?: string }> => {
+  }): Promise<{ success: boolean; data?: AuthResponse; error?: string }> => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING });
       
-      const response = await apiClient.register(userData);
+      const response = await apiClient.register(userData) as AuthResponse;
       
-      // Assuming Django returns tokens on registration
-      if (response.access && response.refresh) {
-        setTokens(response.access, response.refresh);
-        
-        // Fetch user data
-        const userResponse = await apiClient.getCurrentUser();
-        
-        dispatch({
-          type: 'LOGIN_SUCCESS',
-          payload: { user: userResponse.user || userResponse },
-        });
+      if (!response.access || !response.refresh) {
+        throw new Error('Invalid response from server: Missing tokens');
       }
+      
+      setTokens(response.access, response.refresh);
+      
+      // Fetch user data
+      const userResponse = await apiClient.getCurrentUser() as UserResponse | User;
+      const user = 'user' in userResponse ? userResponse.user : userResponse;
+      
+      if (!user) {
+        throw new Error('Failed to fetch user data after registration');
+      }
+      
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: { user },
+      });
       
       return { success: true, data: response };
     } catch (error: unknown) {
@@ -186,23 +203,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
-  };
+  }, []);
 
-  const login = async (credentials: { email: string; password: string }): Promise<{ success: boolean; data?: any; error?: string }> => {
+  const login = useCallback(async (credentials: { email: string; password: string }): Promise<{ success: boolean; data?: AuthResponse; error?: string }> => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING });
       
-      const response = await apiClient.login(credentials);
+      const response = await apiClient.login(credentials) as AuthResponse;
       
-      if (response.access && response.refresh) {
+      if (response?.access && response?.refresh) {
         setTokens(response.access, response.refresh);
         
         // Fetch user data if not included in login response
-        const user = response.user || await apiClient.getCurrentUser();
+        const userData = response.user || (await apiClient.getCurrentUser() as User);
         
         dispatch({
           type: 'LOGIN_SUCCESS',
-          payload: { user },
+          payload: { user: userData },
         });
       }
       
@@ -212,27 +229,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async (): Promise<void> => {
     try {
       const { refresh } = getStoredTokens();
-      
       if (refresh) {
-        // Call logout endpoint to invalidate tokens on server
+        // Pass the refresh token as a string, not an object
         await apiClient.logout(refresh);
       }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      console.error('Logout API call failed:', errorMessage);
-      // Continue with local logout even if API call fails
+    } catch (error) {
+      console.error('Logout error:', error);
     } finally {
       clearTokens();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     }
-  };
+  }, []);
 
-  const refreshAccessToken = async (): Promise<string> => {
+  const refreshAccessToken = useCallback(async (): Promise<string> => {
     try {
       const { refresh } = getStoredTokens();
       
@@ -240,10 +254,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('No refresh token available');
       }
       
-      const response = await apiClient.refreshToken(refresh);
+      const response = await apiClient.refreshToken(refresh) as { access: string; refresh?: string };
       
       if (response.access) {
-        // Update both tokens; backend rotates refresh when enabled
+        // Use the new refresh token if provided, otherwise keep the existing one
         const nextRefresh = response.refresh || refresh;
         setTokens(response.access, nextRefresh);
         return response.access;
@@ -257,53 +271,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logout();
       throw error;
     }
-  };
+  }, [logout]);
 
-  const getCurrentUser = async (): Promise<User> => {
+  const getCurrentUser = useCallback(async (): Promise<User> => {
     try {
-      const user = await apiClient.getCurrentUser();
-      dispatch({ type: AUTH_ACTIONS.SET_USER, payload: user });
-      return user;
-    } catch (error: any) {
-      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
+      const response = await apiClient.getCurrentUser() as User;
+      dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response });
+      return response;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       throw error;
     }
-  };
+  }, []);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
-  };
+  }, []);
 
   // Initialize authentication state on app load
   useEffect(() => {
     const initializeAuth = async () => {
       const { access } = getStoredTokens();
       
-      if (!access) {
-        dispatch({ type: AUTH_ACTIONS.LOGOUT });
-        return;
-      }
-      
-      try {
-        const user = await apiClient.getCurrentUser();
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: user });
-      } catch (error: unknown) {
-        // Token might be expired, try to refresh
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        console.error('Failed to get current user:', errorMessage);
+      if (access) {
         try {
-          await refreshAccessToken();
-          const user = await apiClient.getCurrentUser();
-          dispatch({ type: AUTH_ACTIONS.SET_USER, payload: user });
-        } catch (refreshError) {
-          // Refresh failed, log out
-          logout();
+          // Verify the token is still valid
+          const user = await getCurrentUser();
+          dispatch({ type: AUTH_ACTIONS.LOGIN_SUCCESS, payload: { user } });
+        } catch (error) {
+          // If token is invalid, clear it
+          console.error('Failed to initialize auth:', error);
+          clearTokens();
+          dispatch({ type: AUTH_ACTIONS.LOGOUT });
         }
       }
     };
     
     initializeAuth();
-  }, []);
+  }, [getCurrentUser]);
 
   // Context value with memoization to prevent unnecessary re-renders
   const contextValue: AuthContextType = useMemo(() => ({
@@ -329,16 +335,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 }
 
-// ============================================================================
-// CUSTOM HOOK
-// ============================================================================
-
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
-  
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
   return context;
 }

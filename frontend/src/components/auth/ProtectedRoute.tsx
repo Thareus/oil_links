@@ -18,7 +18,7 @@ const ProtectedRoute = ({
 }: ProtectedRouteProps) => {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [, setIsAuthorized] = useState(false);
 
   useEffect(() => {
     if (!isLoading) {

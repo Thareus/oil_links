@@ -120,7 +120,7 @@ const LoginForm = () => {
 
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Don't have an account?{' '}
+              Don&#39;t have an account?
               <Link href="/register" color="primary" underline="hover">
                 Sign up
               </Link>

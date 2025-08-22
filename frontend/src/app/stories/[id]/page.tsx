@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -55,7 +54,6 @@ interface PageProps {
 
 export default function StoryDetailPage({ params }: PageProps) {
   const { id } = params;
-  const router = useRouter();
   const [story, setStory] = useState<StoryWithSources | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

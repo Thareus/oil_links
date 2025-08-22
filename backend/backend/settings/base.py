@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'whitenoise.runserver_nostatic',
     'drf_yasg',
+    'storages',
     
     # Local apps
     'users.apps.UsersConfig',
